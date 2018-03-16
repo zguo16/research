@@ -5,7 +5,7 @@ clc
 
 %% Generate the Shepp-Logan function
 
-P = phantom( 'Modified Shepp-Logan',100 );% Generate the Shepp-Logan image
+P = phantom( 'Modified Shepp-Logan',10 );% Generate the Shepp-Logan image
 %P = normrnd(0,1,100,100);
 imshow( P )
 
@@ -80,9 +80,9 @@ pmf_theta = pmf_theta./sum(pmf_theta,1);%get the nonuniform pmf
 
 alphabet = around_1_degree*(0:1:num_of_possible_theta-1)';%get the alphabet of theta
 
-num_of_sample = 100;% the number of samples we want
+num_of_sample = 10000;% the number of samples we want
 
-rand_theta = randsrc(num_of_sample,1,[alphabet';pmf_theta']);%generate the random theta
+rand_theta = randsrc( num_of_sample,1,[alphabet';pmf_theta'] );%generate the random theta
 
 
 %% Generating the sample theta
@@ -119,14 +119,14 @@ for i=1:1:num_of_sample
             
             if k < 0
                 
-                temp(1,1,:) = ((-1).^abs(k).*basis.Phi_ns{-k+1}.*exp(1i*k*sample_degree(i,j)))*conj(coeff{-k+1});
+                temp(1,1,:) = ((-1).^(-k).*basis.Phi_ns{-k+1,1}.*exp(1i*k*sample_degree(i,j)))*conj(coeff{-k+1,1});
                 
                 P_theta_xi(i,j,:) = P_theta_xi(i,j,:) + temp;
                 
                 
             else
                 
-                temp(1,1,:) = (basis.Phi_ns{k+1}.*exp(1i*k*sample_degree(i,j)))*coeff{k+1};
+                temp(1,1,:) = (basis.Phi_ns{k+1,1}.*exp(1i*k*sample_degree(i,j)))*coeff{k+1,1};
                 
                 P_theta_xi(i,j,:) = P_theta_xi(i,j,:) + temp;
                 
@@ -146,9 +146,9 @@ size_of_C = n_r*(2*num_of_delta_alpha + 1);
 
 C_rho1_rho2_alpha1_alpha_2 = zeros( size_of_C, size_of_C );% Covariance matrix
 
- temp1 = zeros(num_of_sample,n_r);
+temp1 = zeros(num_of_sample,n_r);
  
- temp2 = zeros(num_of_sample,n_r);
+temp2 = zeros(num_of_sample,n_r);
  
 for i = 1:1:(2*num_of_delta_alpha + 1)
     
@@ -158,13 +158,13 @@ for i = 1:1:(2*num_of_delta_alpha + 1)
         
        temp2(:,:) = P_theta_xi(:,j,:);
        
-       C_rho1_rho2_alpha1_alpha_2(n_r*(i-1)+1:n_r*i,n_r*(j-1)+1:n_r*j) = temp1'*conj(temp2);
+       C_rho1_rho2_alpha1_alpha_2(n_r*(i-1)+1:n_r*i,n_r*(j-1)+1:n_r*j) = temp1.'*conj(temp2);
         
     end
     
 end
 
- C_rho1_rho2_alpha1_alpha_2 = 1./num_of_sample.* C_rho1_rho2_alpha1_alpha_2;
+ C_rho1_rho2_alpha1_alpha_2 = C_rho1_rho2_alpha1_alpha_2./num_of_sample;
 
  
  %% Generating the Psi matrix
@@ -181,10 +181,10 @@ end
          
          if j<0
              Psi((i+num_of_delta_alpha)*n_r+1:(i+num_of_delta_alpha+1)*n_r,temp3+1:temp3+size(coeff{abs(j)+1,1},1)) = ...
-                 (-1).^abs(j).*basis.Phi_ns{abs(j)+1,1}.*exp(1i*j*i*delta_theta.*i);
+                 (-1).^abs(j).*basis.Phi_ns{abs(j)+1,1}.*exp(1i*j*i*delta_theta);
          else
              Psi((i+num_of_delta_alpha)*n_r+1:(i+num_of_delta_alpha+1)*n_r,temp3+1:temp3+size(coeff{j+1,1},1)) = ...
-                 basis.Phi_ns{j+1,1}.*exp(1i*j*i*delta_theta.*i);
+                 basis.Phi_ns{j+1,1}.*exp(1i*j*i*delta_theta);
              
          end
          
@@ -195,9 +195,10 @@ end
  end
  
  
- %% Generating the P(\hat(C)) matrix
  
- %?? not sure about that. ask questions.
+ 
+%% Generating the P(\hat(C)) matrix
+ 
  
  FFT_pmf = fft(pmf_theta); % DFT of pmf
  
@@ -211,8 +212,13 @@ end
      
      for j = -k_max:1:k_max
          if abs(i-j)<=size(FFT_pmf,1)-1
-             C_P(temp4+1:temp4+size(coeff{abs(i)+1,1},1),temp5+1:temp5+size(coeff{abs(j)+1,1},1)) = ...
-              FFT_pmf(abs(i-j)+1,1);
+             if i-j<0
+                 C_P(temp4+1:temp4+size(coeff{abs(i)+1,1},1),temp5+1:temp5+size(coeff{abs(j)+1,1},1)) = ...
+                   FFT_pmf(abs(i-j)+1,1);
+             else
+                 C_P(temp4+1:temp4+size(coeff{abs(i)+1,1},1),temp5+1:temp5+size(coeff{abs(j)+1,1},1)) = ...
+                   conj(FFT_pmf(i-j+1,1));
+             end
          else 
              C_P(temp4+1:temp4+size(coeff{abs(i)+1,1},1),temp5+1:temp5+size(coeff{abs(j)+1,1},1)) = 0;
          end
@@ -225,7 +231,52 @@ end
      
  end
  
+ %% Verify C_rho_1_rho_2_alpha_1_alpha_2
  
+
+ 
+ a1 = cell2mat(coeff);
+ a_minus = cell2mat(coeff(k_max+1,1));
+ a_minus = conj(a_minus);
+ for i =k_max:-1:2
+     temp10 = cell2mat(coeff(i,1));
+     a_minus=[a_minus;conj(temp10)];
+     
+ end
+ a=[a_minus;a1];
+ 
+ 
+ C_rho1_rho2_alpha1_alpha_2_verifty = Psi*(a*(a)'.*C_P)*(Psi)';% to verify covariance matrix
+ 
+ %% C_rho1_rho2_alpha1_alpha_2_verifty2
+ C_rho1_rho2_alpha1_alpha_2_verifty2 = 0;
+ 
+ for k = 1:1:num_of_sample
+     psi = 0; 
+     for i=-num_of_delta_alpha:1:num_of_delta_alpha
+         temp3 = 0;
+     
+     for j = -k_max:1:k_max
+         
+         if j<0
+             psi((i+num_of_delta_alpha)*n_r+1:(i+num_of_delta_alpha+1)*n_r,temp3+1:temp3+size(coeff{abs(j)+1,1},1)) = ...
+                 (-1).^abs(j).*basis.Phi_ns{abs(j)+1,1}.*exp(1i*j*(sample_degree(k,num_of_delta_alpha+i+1)));
+         else
+             psi((i+num_of_delta_alpha)*n_r+1:(i+num_of_delta_alpha+1)*n_r,temp3+1:temp3+size(coeff{j+1,1},1)) = ...
+                 basis.Phi_ns{j+1,1}.*exp(1i*j*(sample_degree(k,num_of_delta_alpha+i+1)));
+             
+         end
+         
+         temp3 = temp3 + size(coeff{abs(j)+1,1},1);
+        
+     end
+     end
+     
+     
+ C_rho1_rho2_alpha1_alpha_2_verifty2 = C_rho1_rho2_alpha1_alpha_2_verifty2 + psi*(a*(a)')*(psi)';
+ end
+ 
+ C_rho1_rho2_alpha1_alpha_2_verifty2 = C_rho1_rho2_alpha1_alpha_2_verifty2./num_of_sample;
  
  
  
